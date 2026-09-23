@@ -3,186 +3,20 @@ import { httpServerHandler } from "cloudflare:node";
 import express from "express";
 
 const app = express();
+app.use(express.json({ limit: "32kb" }));
 
-// Middleware to parse JSON bodies
-app.use(express.json());
+const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="FAVOURWELD ELECTRONICS — electronics repair, winding and welding in Pipeline Kware, Nairobi."><title>FAVOURWELD ELECTRONICS</title><style>
+:root{--navy:#10243a;--blue:#1264b5;--gold:#ffbd3d;--ink:#1c2937;--muted:#66758a;--bg:#f4f7fb;--line:#e3eaf2}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55}header{background:var(--navy);color:white;padding:15px 5%;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}header strong{font-size:1.15rem;letter-spacing:.4px}nav{display:flex;gap:18px;flex-wrap:wrap}a{color:inherit}nav a{text-decoration:none;color:#eaf2fb;font-weight:600}.hero{padding:64px 5%;background:linear-gradient(120deg,#10243a,#174f83);color:white}.hero-inner{max-width:1100px;margin:auto}.tag{color:var(--gold);font-weight:bold;letter-spacing:2px}.hero h1{font-size:clamp(2.1rem,6vw,4rem);line-height:1.08;margin:12px 0}.hero p{max-width:660px;font-size:1.1rem;color:#e1ebf5}.btn{display:inline-block;padding:12px 19px;border-radius:9px;text-decoration:none;font-weight:bold;background:var(--gold);color:#182b3d;border:0;cursor:pointer}.btn.secondary{background:white;color:var(--navy);margin-left:8px}.wrap{max-width:1100px;margin:auto;padding:38px 5%}.section-title{font-size:1.8rem;margin:0 0 8px;color:var(--navy)}.sub{color:var(--muted);margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:24px}.card{background:white;border:1px solid var(--line);border-radius:14px;padding:21px;box-shadow:0 5px 18px #152f4b08}.card h3{margin:8px 0;color:var(--navy)}.icon{font-size:1.7rem}.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px}.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:24px}.field{display:block;width:100%;padding:11px 12px;border:1px solid #ccd7e4;border-radius:8px;margin:6px 0 14px;font:inherit}.field:focus{outline:2px solid #a8cef4;border-color:var(--blue)}label{font-weight:600;font-size:.92rem}.result{margin-top:14px;padding:12px;border-radius:8px;background:#edf5ff;display:none;white-space:pre-wrap}.contact a{color:var(--blue);font-weight:bold}.pill{display:inline-block;padding:5px 10px;background:#eaf3ff;color:#135b9b;border-radius:20px;font-size:.85rem;font-weight:bold}footer{background:#0b1b2c;color:#dce6f1;padding:28px 5%;text-align:center}footer p{margin:5px}.notice{font-size:.9rem;color:var(--muted)}@media(max-width:550px){.hero{padding:45px 5%}.btn.secondary{margin:10px 0 0}}
+</style></head><body><header><strong>⚡ FAVOURWELD ELECTRONICS</strong><nav><a href="#home">Home</a><a href="#services">Services</a><a href="#invoice">Invoice / Cash Sale</a><a href="#contact">Contact</a></nav></header><main><section class="hero" id="home"><div class="hero-inner"><div class="tag">REPAIR • WINDING • WELDING</div><h1>Reliable electronics repair<br>and workshop services.</h1><p>Professional repair and winding services for home appliances, sound systems and workshop equipment. Visit us at Pipeline Kware, Nairobi.</p><a class="btn" href="#services">Explore our services</a><a class="btn secondary" href="https://wa.me/254722434236">Contact on WhatsApp</a></div></section><section class="wrap" id="services"><span class="pill">WHAT WE DO</span><h2 class="section-title">Repair, winding & welding services</h2><p class="sub">Bring your equipment for assessment and service.</p><div class="grid"><article class="card"><div class="icon">📺</div><h3>TV & Radio</h3><p>Television and radio troubleshooting and repair.</p></article><article class="card"><div class="icon">🔊</div><h3>Speakers & Amplifiers</h3><p>Speaker cabinets, speakers, subwoofers and amplifier repair.</p></article><article class="card"><div class="icon">🧺</div><h3>Washing Machines</h3><p>Washing machine fault diagnosis and repair.</p></article><article class="card"><div class="icon">❄️</div><h3>Fridges</h3><p>Refrigerator service and repair enquiries.</p></article><article class="card"><div class="icon">⚙️</div><h3>Generators & Motors</h3><p>Generator repair, motor repair and motor winding.</p></article><article class="card"><div class="icon">🛠️</div><h3>Welding Equipment</h3><p>Welding machines, inverter welding machines and winding.</p></article><article class="card"><div class="icon">🔌</div><h3>Inverters</h3><p>Inverter machine inspection and repair.</p></article><article class="card"><div class="icon">🔥</div><h3>Boiler Burners</h3><p>Boiler burner and related equipment repair enquiries.</p></article><article class="card"><div class="icon">➕</div><h3>Other Equipment</h3><p>Radio, grinder machines, keyboards, bitumen machines and more. Ask us about your equipment.</p></article></div></section><section class="wrap" id="invoice"><span class="pill">CUSTOMER TOOLS</span><h2 class="section-title">Invoice / Cash Sale calculator</h2><p class="sub">Prepare a simple printable estimate or cash-sale record. This tool does not save transactions to a database.</p><div class="two"><div class="panel"><form id="invoiceForm"><label>Customer name</label><input class="field" id="customer" placeholder="Customer name" required><label>Phone number</label><input class="field" id="phone" placeholder="Customer phone"><label>Item / repair description</label><input class="field" id="item" placeholder="e.g. Amplifier repair" required><label>Amount (KSh)</label><input class="field" id="amount" type="number" min="0" step="0.01" required><label>Amount paid (KSh)</label><input class="field" id="paid" type="number" min="0" step="0.01" value="0" required><button class="btn" type="submit">Calculate invoice</button></form><div class="result" id="invoiceResult"></div><button class="btn" id="printBtn" style="display:none;margin-top:12px" onclick="window.print()">Print invoice</button></div><div class="panel"><h3>Payment information</h3><p><strong>M-Pesa Till No:</strong> 8004897</p><p>Please confirm the amount and payment details with FAVOURWELD ELECTRONICS before sending money.</p><p class="notice">Online Daraja STK Push is not activated by this invoice calculator. It requires valid Safaricom Daraja credentials and a configured secure callback/database.</p></div></div></section><section class="wrap" id="contact"><h2 class="section-title">Contact FAVOURWELD ELECTRONICS</h2><div class="two"><div class="panel contact"><p><strong>📍 Location</strong><br>Pipeline Kware, Nairobi, Kenya</p><p><strong>☎ Phone</strong><br><a href="tel:0722434236">0722 434 236</a><br><a href="tel:0750434236">0750 434 236</a></p><p><strong>✉ Email</strong><br><a href="mailto:otabachris@gmail.com">otabachris@gmail.com</a></p><p><strong>M-Pesa Till No:</strong> 8004897</p></div><div class="panel"><h3>Ask about a repair</h3><p>Send us your equipment type and the problem you are experiencing. We can discuss the next steps and assessment.</p><a class="btn" href="https://wa.me/254722434236?text=Hello%20FAVOURWELD%20ELECTRONICS%2C%20I%20would%20like%20to%20ask%20about%20a%20repair.">Message us</a></div></div></section></main><footer><p><strong>FAVOURWELD ELECTRONICS</strong></p><p>REPAIR • WINDING • WELDING</p><p>Pipeline Kware, Nairobi, Kenya</p><p>© <span id="year"></span> FAVOURWELD ELECTRONICS</p></footer><script>
+document.getElementById('year').textContent=new Date().getFullYear();document.getElementById('invoiceForm').addEventListener('submit',function(e){e.preventDefault();const customer=document.getElementById('customer').value.trim(),phone=document.getElementById('phone').value.trim(),item=document.getElementById('item').value.trim(),amount=Number(document.getElementById('amount').value),paid=Number(document.getElementById('paid').value);if(!customer||!item||!Number.isFinite(amount)||!Number.isFinite(paid)||amount<0||paid<0){alert('Please enter valid invoice details.');return}const balance=amount-paid;const money=n=>'KSh '+n.toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});const out=document.getElementById('invoiceResult');out.textContent='FAVOURWELD ELECTRONICS\\nPipeline Kware, Nairobi\\nTill No: 8004897\\n------------------------------\\nCustomer: '+customer+'\\nPhone: '+(phone||'—')+'\\nDescription: '+item+'\\nTotal: '+money(amount)+'\\nPaid: '+money(paid)+'\\nBalance: '+money(balance)+'\\nStatus: '+(balance<=0?'PAID':'BALANCE DUE')+'\\nDate: '+new Date().toLocaleDateString('en-KE')+'\\n\\nThank you for your business.';out.style.display='block';document.getElementById('printBtn').style.display='inline-block'});
+</script></body></html>`;
 
-// Health check endpoint
-app.get("/", (req, res) => {
-  res.json({ message: "Express.js running on Cloudflare Workers!" });
+app.get("/", (_req, res) => res.status(200).type("html").send(page));
+app.get("/api/health", (_req, res) => res.json({ success: true, service: "FAVOURWELD ELECTRONICS" }));
+app.get("/api/members", async (_req, res) => {
+  try { const { results } = await env.DB.prepare("SELECT * FROM members ORDER BY joined_date DESC").all(); res.json({ success: true, members: results }); }
+  catch { res.status(500).json({ success: false, error: "Database unavailable or members table not configured" }); }
 });
-
-// GET all members
-app.get("/api/members", async (req, res) => {
-  try {
-    const { results } = await env.DB.prepare(
-      "SELECT * FROM members ORDER BY joined_date DESC"
-    ).all();
-
-    res.json({ success: true, members: results });
-  } catch (error) {
-    res.status(500).json({ success: false, error: "Failed to fetch members" });
-  }
-});
-
-// GET a single member by ID
-app.get("/api/members/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const { results } = await env.DB.prepare(
-      "SELECT * FROM members WHERE id = ?"
-    )
-      .bind(id)
-      .all();
-
-    if (results.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Member not found" });
-    }
-
-    res.json({ success: true, member: results[0] });
-  } catch (error) {
-    res.status(500).json({ success: false, error: "Failed to fetch member" });
-  }
-});
-
-// PUT - Update a member
-app.put("/api/members/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email } = req.body;
-
-    // Validate input
-    if (!name && !email) {
-      return res.status(400).json({
-        success: false,
-        error: "At least one field (name or email) is required",
-      });
-    }
-
-    // Basic email validation if provided (simplified for tutorial purposes)
-    // For production, consider using a validation library or more comprehensive checks
-    if (email && (!email.includes("@") || !email.includes("."))) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid email format",
-      });
-    }
-
-    // Build dynamic update query
-    const updates: string[] = [];
-    const values: any[] = [];
-
-    if (name) {
-      updates.push("name = ?");
-      values.push(name);
-    }
-    if (email) {
-      updates.push("email = ?");
-      values.push(email);
-    }
-
-    values.push(id);
-
-    const result = await env.DB.prepare(
-      `UPDATE members SET ${updates.join(", ")} WHERE id = ?`
-    )
-      .bind(...values)
-      .run();
-
-    if (result.meta.changes === 0) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Member not found" });
-    }
-
-    res.json({ success: true, message: "Member updated successfully" });
-  } catch (error: any) {
-    if (error.message?.includes("UNIQUE constraint failed")) {
-      return res.status(409).json({
-        success: false,
-        error: "Email already exists",
-      });
-    }
-    res.status(500).json({ success: false, error: "Failed to update member" });
-  }
-});
-
-// POST - Create a new member
-app.post("/api/members", async (req, res) => {
-  try {
-    const { name, email } = req.body;
-
-    // Validate input
-    if (!name || !email) {
-      return res.status(400).json({
-        success: false,
-        error: "Name and email are required",
-      });
-    }
-
-    // Basic email validation (simplified for tutorial purposes)
-    // For production, consider using a validation library or more comprehensive checks
-    if (!email.includes("@") || !email.includes(".")) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid email format",
-      });
-    }
-
-    const joined_date = new Date().toISOString().split("T")[0];
-
-    const result = await env.DB.prepare(
-      "INSERT INTO members (name, email, joined_date) VALUES (?, ?, ?)"
-    )
-      .bind(name, email, joined_date)
-      .run();
-
-    if (result.success) {
-      res.status(201).json({
-        success: true,
-        message: "Member created successfully",
-        id: result.meta.last_row_id,
-      });
-    } else {
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to create member" });
-    }
-  } catch (error: any) {
-    // Handle unique constraint violation
-    if (error.message?.includes("UNIQUE constraint failed")) {
-      return res.status(409).json({
-        success: false,
-        error: "Email already exists",
-      });
-    }
-    res.status(500).json({ success: false, error: "Failed to create member" });
-  }
-});
-
-// DELETE - Delete a member
-app.delete("/api/members/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await env.DB.prepare("DELETE FROM members WHERE id = ?")
-      .bind(id)
-      .run();
-
-    if (result.meta.changes === 0) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Member not found" });
-    }
-
-    res.json({ success: true, message: "Member deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ success: false, error: "Failed to delete member" });
-  }
-});
-
+app.use((_req, res) => res.status(404).json({ success: false, error: "Not found" }));
 app.listen(3000);
 export default httpServerHandler({ port: 3000 });
