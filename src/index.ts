@@ -2,9 +2,15 @@ import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import express from "express";
 import { registerBusinessRoutes } from "./backend";
+import { verifyIntaSendWebhook } from "./intasend";
 
 const app = express();
-app.use(express.json({ limit: "32kb" }));
+app.use(express.json({
+  limit: "32kb",
+  verify: (req, _res, buffer) => {
+    (req as any).rawBody = buffer.toString("utf8");
+  },
+}));
 app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -21,50 +27,6 @@ const getEnvString = (value: unknown): string =>
 
 const jsonError = (res: any, status: number, error: string) =>
   res.status(status).json({ success: false, error });
-
-async function signHmac(secret: string, payload: string): Promise<string> {
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const digest = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(payload));
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function verifyIntaSendSignature(
-  payload: unknown,
-  providedSignature: string | string[] | undefined,
-  secret: string
-): Promise<boolean> {
-  if (!providedSignature || !secret) return false;
-
-  const signatures = Array.isArray(providedSignature)
-    ? providedSignature
-    : [providedSignature];
-
-  const raw = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
-  const variants = [
-    raw,
-    JSON.stringify(payload ?? {}, Object.keys((payload as Record<string, unknown>) ?? {}).sort()),
-    `${secret}${raw}`,
-    `${raw}${secret}`,
-  ].filter(Boolean);
-
-  const normalized = signatures.map((value) => value.toLowerCase().replace(/^sha256=/i, ""));
-
-  for (const variant of variants) {
-    const digest = await signHmac(secret, variant);
-    if (normalized.includes(digest)) return true;
-  }
-
-  return false;
-}
 
 const page = `<!doctype html>
 <html lang="en">
@@ -381,25 +343,30 @@ app.post("/api/payments/initiate", async (req, res) => {
 
 app.post("/api/payments/callback", async (req, res) => {
   try {
-    const signature =
-      (req.headers["x-intasend-signature"] as string | string[] | undefined) ??
-      (req.headers["x-signature"] as string | string[] | undefined);
-    const secret = getEnvString((env as any).INTASEND_WEBHOOK_SECRET);
+    const rawBody = (req as any).rawBody ?? "";
+    const signature = req.header("x-intasend-signature");
+    const apiKey = getEnvString((env as any).INTASEND_API_KEY);
 
-    if (!secret) {
+    if (!apiKey) {
       return jsonError(
         res,
         500,
-        "INTASEND_WEBHOOK_SECRET is not configured. Configure the secret before accepting callbacks."
+        "INTASEND_API_KEY is not configured. Configure the API key before accepting callbacks."
       );
     }
 
-    const isValid = await verifyIntaSendSignature(req.body, signature, secret);
+    const isValid = await verifyIntaSendWebhook(rawBody, signature, apiKey);
     if (!isValid) {
       return jsonError(res, 401, "Invalid IntaSend callback signature.");
     }
 
-    const payload = req.body ?? {};
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return jsonError(res, 400, "Invalid callback JSON payload.");
+    }
+
     const payloadData = payload?.data ?? payload;
     const paymentStatus = String(payloadData?.status ?? payload?.status ?? "pending").toLowerCase();
     const amount = Number(payloadData?.amount ?? payload?.amount ?? 0);
