@@ -11,6 +11,9 @@
 	"observability": {
 		"enabled": true
 	},
+	"secrets": {
+		"required": ["INTASEND_API_KEY", "INTASEND_API_BASE_URL", "INTASEND_WEBHOOK_SECRET"]
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",
