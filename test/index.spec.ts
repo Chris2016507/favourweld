@@ -88,7 +88,7 @@ describe('FAVOURWELD worker', () => {
   it('returns the health payload', async () => {
     const response = await callWorker('/api/health');
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       service: 'FAVOURWELD ELECTRONICS',
@@ -111,7 +111,7 @@ describe('FAVOURWELD worker', () => {
 
   it('initiates IntaSend checkout when configuration is present', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: { checkout_id: 'chk_123' } }), {
+      new Response(JSON.stringify({ url: 'https://sandbox.intasend.com/checkout/chk_123' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -122,37 +122,37 @@ describe('FAVOURWELD worker', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoice_id: 1, amount: 1000, phone: '254712345678', email: 'customer@example.com' }),
     }, {
-      INTASEND_API_KEY: 'api-key',
-      INTASEND_SECRET_KEY: 'secret-key',
-      INTASEND_CALLBACK_URL: 'https://example.com/callback',
+      INTASEND_API_KEY: 'ISPubKey_test',
+      INTASEND_API_BASE_URL: 'https://sandbox.intasend.com',
+      INTASEND_WEBHOOK_SECRET: 'webhook-secret',
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
-      reference: 'chk_123',
+      reference: expect.stringContaining('FW-INVOICE-1-'),
+      checkout_url: 'https://sandbox.intasend.com/checkout/chk_123',
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(
-      'https://payment.intasend.com/api/v1/checkout/initialize',
+      'https://sandbox.intasend.com/api/v1/checkout/',
       expect.objectContaining({
         method: 'POST',
       })
     );
   });
 
-  it('rejects an IntaSend callback with a missing signature', async () => {
+  it('rejects an IntaSend callback with an invalid challenge', async () => {
     const response = await callWorker('/api/payments/callback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        data: {
-          status: 'paid',
-          amount: 1000,
-          metadata: { invoice_id: 1 },
-          transaction_id: 'tx_123',
-        },
+        state: 'COMPLETE',
+        value: 1000,
+        currency: 'KES',
+        api_ref: 'FW-INVOICE-1-test',
+        challenge: 'wrong-secret',
       }),
     }, {
       INTASEND_WEBHOOK_SECRET: 'webhook-secret',
@@ -162,27 +162,23 @@ describe('FAVOURWELD worker', () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({
       success: false,
-      error: 'Invalid IntaSend callback signature.',
+      error: 'Invalid IntaSend webhook challenge.',
     });
   });
 
   it('accepts a valid IntaSend callback and updates the invoice balance', async () => {
     const payload = {
-      data: {
-        status: 'paid',
-        amount: 1000,
-        metadata: { invoice_id: 1 },
-        transaction_id: 'tx_123',
-      },
+      state: 'COMPLETE',
+      value: 1000,
+      currency: 'KES',
+      api_ref: 'FW-INVOICE-1-test',
+      challenge: 'webhook-secret',
     };
-
-    const signature = await signPayload('webhook-secret', payload);
 
     const response = await callWorker('/api/payments/callback', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-intasend-signature': signature,
       },
       body: JSON.stringify(payload),
     }, {
