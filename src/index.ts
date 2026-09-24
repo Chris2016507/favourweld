@@ -249,8 +249,9 @@ app.post("/api/payments/initiate", async (req, res) => {
     // IntaSend checkout creation uses the publishable/public API key.
     // Keep this value server-side here so the client never controls payment parameters.
     const publicKey = getEnvString((env as any).INTASEND_API_KEY);
-    if (!publicKey) {
-      return jsonError(res, 500, "INTASEND_API_KEY is missing. Configure the IntaSend publishable/public key.");
+    const apiBaseUrl = getEnvString((env as any).INTASEND_API_BASE_URL).replace(/\\/$/, "");
+    if (!publicKey || !apiBaseUrl) {
+      return jsonError(res, 500, "IntaSend settings are missing. Configure INTASEND_API_KEY and INTASEND_API_BASE_URL.");
     }
 
     const invoiceId = Number(req.body?.invoice_id);
@@ -305,7 +306,7 @@ app.post("/api/payments/initiate", async (req, res) => {
       redirect_url: `${origin}/?payment=complete&invoice_id=${invoiceId}`,
     };
 
-    const response = await fetch("https://api.intasend.com/api/v1/checkout/", {
+    const response = await fetch(`${apiBaseUrl}/api/v1/checkout/`, {
       method: "POST",
       headers: {
         "X-IntaSend-Public-API-Key": publicKey,
