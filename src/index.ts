@@ -17,7 +17,7 @@ app.use((_req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://payment.intasend.com"
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://payment.intasend.com https://sandbox.intasend.com"
   );
   next();
 });
@@ -206,6 +206,11 @@ const page = `<!doctype html>
         paymentStatus.textContent = message;
       }
 
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('payment') === 'complete') {
+        setStatus('success', 'You have returned from IntaSend. Your payment is being confirmed. The invoice will update after the IntaSend webhook is received.');
+      }
+
       form.addEventListener('submit', async function (event) {
         event.preventDefault();
         const payload = {
@@ -228,7 +233,13 @@ const page = `<!doctype html>
             throw new Error(data.error || 'Payment initiation failed.');
           }
 
-          setStatus('success', 'Payment request has been initiated successfully. Please complete the M-Pesa prompt on your phone.');
+          if (data.checkout_url) {
+            setStatus('success', 'Opening the secure IntaSend checkout. Complete your M-Pesa payment there.');
+            window.location.assign(data.checkout_url);
+            return;
+          }
+
+          setStatus('success', 'Payment checkout was created, but no checkout URL was returned. Please contact FAVOURWELD support.');
         } catch (error) {
           setStatus('error', error.message || 'Unable to start payment request.');
         }
