@@ -2,7 +2,6 @@ import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import express from "express";
 import { registerBusinessRoutes } from "./backend";
-import { verifyIntaSendWebhook } from "./intasend";
 
 const app = express();
 app.use(express.json({
