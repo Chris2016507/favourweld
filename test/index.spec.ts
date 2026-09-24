@@ -21,8 +21,8 @@ const buildDbMock = (overrides?: Record<string, unknown>) => {
                 return state.lastInvoice as T;
               }
 
-              if (sql.includes('SELECT id, provider_reference, status, amount FROM payments WHERE invoice_id = ? ORDER BY id DESC LIMIT 1')) {
-                return null as T | null;
+              if (sql.includes('SELECT id, invoice_id, amount, status FROM payments WHERE provider_reference = ? LIMIT 1')) {
+                return { id: 1, invoice_id: 1, amount: 1000, status: 'pending' } as T;
               }
 
               if (sql.includes('SELECT COALESCE(SUM(amount), 0) AS total_paid FROM payments WHERE invoice_id = ? AND status = \'completed\'')) {
@@ -88,7 +88,7 @@ describe('FAVOURWELD worker', () => {
   it('returns the health payload', async () => {
     const response = await callWorker('/api/health');
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       service: 'FAVOURWELD ELECTRONICS',
@@ -127,7 +127,7 @@ describe('FAVOURWELD worker', () => {
       INTASEND_WEBHOOK_SECRET: 'webhook-secret',
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       reference: expect.stringContaining('FW-INVOICE-1-'),
