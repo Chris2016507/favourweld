@@ -51,10 +51,11 @@ Configure:
 
 ```bash
 wrangler secret put INTASEND_API_KEY
+wrangler secret put INTASEND_API_BASE_URL
 wrangler secret put INTASEND_WEBHOOK_SECRET
 ```
 
-For `INTASEND_API_KEY`, use the IntaSend **publishable/public key** for the same environment as the Worker (sandbox/test while testing, live only for production).
+For `INTASEND_API_KEY`, use the IntaSend **publishable/public key** for the same environment as the Worker (sandbox/test while testing, live only for production).\n\nFor sandbox testing, set `INTASEND_API_BASE_URL` to `https://sandbox.intasend.com`. For production, set it to `https://payment.intasend.com`.
 
 For `INTASEND_WEBHOOK_SECRET`, enter the exact webhook **challenge** you configure in the IntaSend dashboard. IntaSend includes this challenge in collection webhook payloads; FAVOURWELD rejects callbacks whose challenge does not match.
 
