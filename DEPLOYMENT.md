@@ -41,20 +41,32 @@ Store credentials as Worker secrets. Never commit secret values to GitHub or exp
 
 ### Preferred IntaSend integration
 
+The current FAVOURWELD payment flow uses IntaSend Checkout with M-Pesa. IntaSend's current Checkout API is:
+
+`POST https://api.intasend.com/api/v1/checkout/`
+
+and authenticates checkout creation with the `X-IntaSend-Public-API-Key` header. The public/publishable key identifies the account; keep it in Worker configuration even though it is not a secret credential. The secret key is not required for this checkout-creation route.
+
+Configure:
+
 ```bash
 wrangler secret put INTASEND_API_KEY
-wrangler secret put INTASEND_SECRET_KEY
 wrangler secret put INTASEND_WEBHOOK_SECRET
-wrangler secret put INTASEND_CALLBACK_URL
 ```
 
-Configure `INTASEND_CALLBACK_URL` to the public HTTPS URL for:
+For `INTASEND_API_KEY`, use the IntaSend **publishable/public key** for the same environment as the Worker (sandbox/test while testing, live only for production).
+
+For `INTASEND_WEBHOOK_SECRET`, enter the exact webhook **challenge** you configure in the IntaSend dashboard. IntaSend includes this challenge in collection webhook payloads; FAVOURWELD rejects callbacks whose challenge does not match.
+
+The callback endpoint is:
 
 ```text
 /api/payments/callback
 ```
 
-The exact IntaSend endpoint, request fields, and webhook signature rules must match the current IntaSend developer documentation.
+The checkout request uses an `api_ref` such as `FW-INVOICE-123-<uuid>`. The webhook uses that `api_ref` to find the pending D1 payment record.
+
+The application now uses IntaSend's documented collection fields: `state`, `value`, `currency`, and `api_ref`. A `COMPLETE` event changes the payment to completed and recalculates the invoice balance. `FAILED`, `PENDING`, and `PROCESSING` events do not mark the invoice paid.
 
 ### Optional direct Daraja integration
 
