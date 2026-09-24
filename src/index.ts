@@ -246,33 +246,29 @@ registerBusinessRoutes(app, (env as any).DB);
 
 app.post("/api/payments/initiate", async (req, res) => {
   try {
-    const apiKey = getEnvString((env as any).INTASEND_API_KEY);
-    const secretKey = getEnvString((env as any).INTASEND_SECRET_KEY);
-    const callbackUrl = getEnvString((env as any).INTASEND_CALLBACK_URL);
-
-    if (!apiKey || !secretKey || !callbackUrl) {
-      return jsonError(
-        res,
-        500,
-        "IntaSend settings are missing. Configure INTASEND_API_KEY, INTASEND_SECRET_KEY and INTASEND_CALLBACK_URL."
-      );
+    // IntaSend checkout creation uses the publishable/public API key.
+    // Keep this value server-side here so the client never controls payment parameters.
+    const publicKey = getEnvString((env as any).INTASEND_API_KEY);
+    if (!publicKey) {
+      return jsonError(res, 500, "INTASEND_API_KEY is missing. Configure the IntaSend publishable/public key.");
     }
 
     const invoiceId = Number(req.body?.invoice_id);
     const amount = Number(req.body?.amount);
-    const phone = String(req.body?.phone || "").trim();
+    const phone = String(req.body?.phone || "").replace(/\\s+/g, "");
     const email = String(req.body?.email || "").trim();
 
     if (!Number.isSafeInteger(invoiceId) || invoiceId < 1) {
       return jsonError(res, 400, "A valid invoice_id is required.");
     }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return jsonError(res, 400, "A valid amount in KES is required.");
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amount)) {
+      return jsonError(res, 400, "A valid whole KES amount is required.");
     }
-
-    if (!/^254\d{9}$/.test(phone.replace(/\s+/g, ""))) {
+    if (!/^254\\d{9}$/.test(phone)) {
       return jsonError(res, 400, "Phone number must be in the format 2547XXXXXXXX.");
+    }
+    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      return jsonError(res, 400, "Email address is not valid.");
     }
 
     const db: any = (env as any).DB;
@@ -281,24 +277,38 @@ app.post("/api/payments/initiate", async (req, res) => {
       .bind(invoiceId)
       .first();
 
-    if (!invoice) {
-      return jsonError(res, 404, "Invoice not found.");
+    if (!invoice) return jsonError(res, 404, "Invoice not found.");
+
+    const balance = Number(invoice.balance);
+    if (!Number.isFinite(balance) || balance <= 0) {
+      return jsonError(res, 400, "This invoice has no outstanding balance.");
+    }
+    if (amount > balance) {
+      return jsonError(res, 400, "Payment amount cannot exceed the outstanding invoice balance.");
     }
 
+    const apiRef = `FW-INVOICE-${invoiceId}-${crypto.randomUUID()}`;
+    const origin = new URL(req.url).origin;
+
     const requestPayload = {
-      amount,
+      amount: amount.toFixed(2),
       currency: "KES",
-      email: email || "customer@example.com",
       phone_number: phone,
-      description: `Invoice payment ${invoiceId}`,
-      callback_url: callbackUrl,
-      metadata: { invoice_id: invoiceId },
+      email: email || null,
+      country: "KE",
+      api_ref: apiRef,
+      method: "M-PESA",
+      channel: "WEBSITE",
+      host: origin,
+      is_mobile: true,
+      mobile_tarrif: "BUSINESS-PAYS",
+      redirect_url: `${origin}/?payment=complete&invoice_id=${invoiceId}`,
     };
 
-    const response = await fetch("https://payment.intasend.com/api/v1/checkout/initialize", {
+    const response = await fetch("https://api.intasend.com/api/v1/checkout/", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "X-IntaSend-Public-API-Key": publicKey,
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -306,37 +316,33 @@ app.post("/api/payments/initiate", async (req, res) => {
     });
 
     const data = await response.json().catch(() => ({}));
-
     if (!response.ok) {
       return jsonError(
         res,
         response.status,
-        data?.message || data?.error || "IntaSend checkout initialization failed."
+        data?.detail || data?.message || data?.error || "IntaSend checkout creation failed."
       );
     }
 
-    const reference =
-      data?.data?.checkout_id ??
-      data?.data?.transaction_id ??
-      data?.data?.reference ??
-      data?.checkout_id ??
-      data?.transaction_id ??
-      data?.reference ??
-      `intasend-${Date.now()}`;
-
+    const checkoutUrl = data?.url ?? data?.data?.url ?? data?.checkout_url ?? null;
     await db
       .prepare(
-        "INSERT INTO payments (invoice_id, provider, method, amount, currency, provider_reference, payer_phone, status, raw_callback, created_at) VALUES (?, 'mpesa', 'mpesa', ?, 'KES', ?, ?, 'pending', ?, datetime('now'))"
+        "INSERT INTO payments (invoice_id, provider, method, amount, currency, provider_reference, payer_phone, status, raw_callback, created_at) VALUES (?, 'intasend', 'mpesa', ?, 'KES', ?, ?, 'pending', ?, datetime('now'))"
       )
-      .bind(invoiceId, amount, reference, phone, JSON.stringify({ request: requestPayload, response: data }))
+      .bind(invoiceId, amount, apiRef, phone, JSON.stringify({ request: requestPayload, response: data }))
       .run();
 
-    return res.status(200).json({ success: true, data, reference });
+    return res.status(201).json({
+      success: true,
+      reference: apiRef,
+      checkout_url: checkoutUrl,
+      data,
+    });
   } catch (error) {
     return jsonError(
       res,
       500,
-      error instanceof Error ? error.message : "Unable to initiate payment request."
+      error instanceof Error ? error.message : "Unable to initiate IntaSend payment."
     );
   }
 });
@@ -344,20 +350,10 @@ app.post("/api/payments/initiate", async (req, res) => {
 app.post("/api/payments/callback", async (req, res) => {
   try {
     const rawBody = (req as any).rawBody ?? "";
-    const signature = req.header("x-intasend-signature");
-    const apiKey = getEnvString((env as any).INTASEND_API_KEY);
+    const challenge = getEnvString((env as any).INTASEND_WEBHOOK_SECRET);
 
-    if (!apiKey) {
-      return jsonError(
-        res,
-        500,
-        "INTASEND_API_KEY is not configured. Configure the API key before accepting callbacks."
-      );
-    }
-
-    const isValid = await verifyIntaSendWebhook(rawBody, signature, apiKey);
-    if (!isValid) {
-      return jsonError(res, 401, "Invalid IntaSend callback signature.");
+    if (!challenge) {
+      return jsonError(res, 500, "INTASEND_WEBHOOK_SECRET is not configured.");
     }
 
     let payload: any;
@@ -367,78 +363,76 @@ app.post("/api/payments/callback", async (req, res) => {
       return jsonError(res, 400, "Invalid callback JSON payload.");
     }
 
-    const payloadData = payload?.data ?? payload;
-    const paymentStatus = String(payloadData?.status ?? payload?.status ?? "pending").toLowerCase();
-    const amount = Number(payloadData?.amount ?? payload?.amount ?? 0);
-    const invoiceId = Number(
-      payloadData?.metadata?.invoice_id ??
-        payload?.metadata?.invoice_id ??
-        payloadData?.invoice_id ??
-        payload?.invoice_id ??
-        0
-    );
-    const providerReference = String(
-      payloadData?.transaction_id ??
-        payloadData?.reference ??
-        payloadData?.checkout_id ??
-        payload?.transaction_id ??
-        payload?.reference ??
-        ""
-    );
-
-    if (!Number.isSafeInteger(invoiceId) || invoiceId < 1) {
-      return jsonError(res, 400, "Callback does not include a valid invoice identifier.");
+    // IntaSend webhook setup uses a dashboard-configured challenge.
+    // The same challenge is included in webhook payloads.
+    if (String(payload?.challenge ?? "") !== challenge) {
+      return jsonError(res, 401, "Invalid IntaSend webhook challenge.");
     }
+
+    const state = String(payload?.state ?? "").toUpperCase();
+    const apiRef = String(payload?.api_ref ?? "").trim();
+    const amount = Number(payload?.value ?? 0);
+    const currency = String(payload?.currency ?? "").toUpperCase();
+
+    if (!apiRef) return jsonError(res, 400, "Callback does not include api_ref.");
+    if (!Number.isFinite(amount) || amount <= 0) return jsonError(res, 400, "Callback does not include a valid payment amount.");
+    if (currency !== "KES") return jsonError(res, 400, "Unsupported payment currency.");
 
     const db: any = (env as any).DB;
-    const existingPayment = await db
-      .prepare(
-        "SELECT id, provider_reference, status, amount FROM payments WHERE invoice_id = ? ORDER BY id DESC LIMIT 1"
-      )
-      .bind(invoiceId)
+    const payment = await db
+      .prepare("SELECT id, invoice_id, amount, status FROM payments WHERE provider_reference = ? LIMIT 1")
+      .bind(apiRef)
       .first();
 
-    if (existingPayment && existingPayment.provider_reference && existingPayment.provider_reference === providerReference) {
-      return res.status(200).json({ success: true, already_processed: true });
+    if (!payment) {
+      return jsonError(res, 404, "Payment reference was not found.");
     }
-
-    await db
-      .prepare(
-        "INSERT INTO payments (invoice_id, provider, method, amount, currency, provider_reference, status, raw_callback, created_at) VALUES (?, 'mpesa', 'mpesa', ?, 'KES', ?, ?, ?, datetime('now'))"
-      )
-      .bind(
-        invoiceId,
-        Number.isFinite(amount) && amount > 0 ? amount : 0,
-        providerReference || null,
-        ["paid", "completed", "success"].includes(paymentStatus) ? "completed" : "pending",
-        JSON.stringify(payload)
-      )
-      .run();
-
-    const totals = await db
-      .prepare("SELECT COALESCE(SUM(amount), 0) AS total_paid FROM payments WHERE invoice_id = ? AND status = 'completed'")
-      .bind(invoiceId)
-      .first();
 
     const invoice = await db
       .prepare("SELECT id, total, amount_paid, balance, status FROM invoices WHERE id = ?")
-      .bind(invoiceId)
+      .bind(payment.invoice_id)
       .first();
 
-    if (invoice) {
+    if (!invoice) return jsonError(res, 404, "Invoice for payment was not found.");
+
+    if (state === "COMPLETE") {
+      if (amount > Number(invoice.balance)) {
+        return jsonError(res, 409, "Confirmed payment exceeds the outstanding invoice balance.");
+      }
+
+      await db
+        .prepare(
+          "UPDATE payments SET status = 'completed', amount = ?, currency = 'KES', raw_callback = ?, completed_at = datetime('now') WHERE id = ?"
+        )
+        .bind(amount, rawBody, payment.id)
+        .run();
+
+      const totals = await db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total_paid FROM payments WHERE invoice_id = ? AND status = 'completed'")
+        .bind(invoice.id)
+        .first();
+
       const totalPaid = Number(totals?.total_paid ?? 0);
       const newBalance = Math.max(0, Number(invoice.total) - totalPaid);
       const nextStatus = totalPaid >= Number(invoice.total) ? "paid" : "part_paid";
 
       await db
-        .prepare(
-          "UPDATE invoices SET amount_paid = ?, balance = ?, status = ? WHERE id = ?"
-        )
-        .bind(totalPaid, newBalance, nextStatus, invoiceId)
+        .prepare("UPDATE invoices SET amount_paid = ?, balance = ?, status = ? WHERE id = ?")
+        .bind(totalPaid, newBalance, nextStatus, invoice.id)
+        .run();
+    } else if (state === "FAILED") {
+      await db
+        .prepare("UPDATE payments SET status = 'failed', raw_callback = ? WHERE id = ?")
+        .bind(rawBody, payment.id)
+        .run();
+    } else if (state === "PENDING" || state === "PROCESSING") {
+      await db
+        .prepare("UPDATE payments SET status = 'pending', raw_callback = ? WHERE id = ?")
+        .bind(rawBody, payment.id)
         .run();
     }
 
-    return res.status(200).json({ success: true, processed: true });
+    return res.status(200).json({ success: true, processed: true, state, api_ref: apiRef });
   } catch (error) {
     return jsonError(
       res,
