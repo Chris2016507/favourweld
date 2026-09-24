@@ -27,20 +27,30 @@ function hexToBytes(value: string): Uint8Array | null {
   return bytes;
 }
 
+/** Compare equal-length byte arrays without early exit on the first mismatch. */
+function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left[index] ^ right[index];
+  }
+  return difference === 0;
+}
+
 /**
- * Verify an IntaSend webhook using the raw request body and API key.
- * The raw body must be captured before JSON parsing or re-serialization.
+ * Verify an IntaSend webhook using the raw request body and configured signing key.
+ * Capture the exact raw body before JSON parsing or re-serialization.
  */
 export async function verifyIntaSendWebhook(
   rawBody: string,
   signature: string | null | undefined,
-  apiKey: string,
+  signingKey: string,
 ): Promise<boolean> {
-  if (!signature || !apiKey) return false;
+  if (!signature || !signingKey || !rawBody) return false;
 
-  const expected = hexToBytes(await createIntaSendSignature(rawBody, apiKey));
+  const expected = hexToBytes(await createIntaSendSignature(rawBody, signingKey));
   const received = hexToBytes(signature.trim());
   if (!expected || !received) return false;
 
-  return crypto.subtle.timingSafeEqual(expected, received);
+  return constantTimeEqual(expected, received);
 }
