@@ -55,9 +55,19 @@ wrangler secret put INTASEND_API_BASE_URL
 wrangler secret put INTASEND_WEBHOOK_SECRET
 ```
 
-For `INTASEND_API_KEY`, use the IntaSend **publishable/public key** for the same environment as the Worker (sandbox/test while testing, live only for production).\n\nFor sandbox testing, set `INTASEND_API_BASE_URL` to `https://sandbox.intasend.com`. For production, set it to `https://payment.intasend.com`.
+For `INTASEND_API_KEY`, use the IntaSend **publishable/public key** for the same environment as the Worker (sandbox/test while testing, live only for production).
+
+For sandbox testing, set `INTASEND_API_BASE_URL` to `https://sandbox.intasend.com`. For production, set it to `https://payment.intasend.com`.
 
 For `INTASEND_WEBHOOK_SECRET`, enter the exact webhook **challenge** you configure in the IntaSend dashboard. IntaSend includes this challenge in collection webhook payloads; FAVOURWELD rejects callbacks whose challenge does not match.
+
+The webhook must point to the deployed HTTPS Worker URL:
+
+```text
+https://YOUR-DOMAIN/api/payments/callback
+```
+
+Do not use the local `wrangler dev` URL for the production webhook.
 
 The callback endpoint is:
 
@@ -117,11 +127,23 @@ Use local secret files or Wrangler local secret configuration for development. D
 
 ## Deployment
 
+The repository now declares the three IntaSend configuration names as required Wrangler secrets. Cloudflare will reject deployment when a required secret is missing. Cloudflare documents `wrangler secret put` for creating/updating Worker secrets.
+
 Before deploying, verify the target account, Worker name, D1 database ID, and environment.
 
 ```bash
 npm run deploy
 ```
+
+If a required secret is missing, set it first:
+
+```bash
+npx wrangler secret put INTASEND_API_KEY
+npx wrangler secret put INTASEND_API_BASE_URL
+npx wrangler secret put INTASEND_WEBHOOK_SECRET
+```
+
+For the sandbox, enter `https://sandbox.intasend.com` as `INTASEND_API_BASE_URL`. IntaSend documents the sandbox API base as `https://sandbox.intasend.com/api/`; the application appends `/api/v1/checkout/` itself.
 
 After deployment, verify the health endpoint:
 
