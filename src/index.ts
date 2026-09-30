@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import express from "express";
 import { registerBusinessRoutes } from "./backend";
+import { registerMarketplaceRoutes } from "./marketplace";
 
 const app = express();
 app.use(express.json({
@@ -253,6 +254,7 @@ app.get("/api/health", (_req, res) =>
 );
 
 registerBusinessRoutes(app, (env as any).DB);
+registerMarketplaceRoutes(app, (env as any).DB);
 
 app.post("/api/payments/initiate", async (req, res) => {
   try {
